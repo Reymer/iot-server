@@ -1,0 +1,97 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 41e10e8450463f641b3075a8e30c54a1, type: 3}
+  m_Name: UICollectorSetting
+  m_EditorClassIdentifier: 
+  groupNames:
+  - UI
+  - table
+  keys:
+  - UI_DeleteButton
+  - UI_Menu
+  - UI_AddPort
+  - UI_MenuCancel
+  - UI_OK
+  - UI_Console
+  - UI_clear
+  - UI_Tables
+  - UI_MenuRoot
+  - UI_ConsoleUI
+  - UI_Consolelayout
+  - UI_NetProtrocolTitle
+  - UI_RemotePortInput
+  - UI_LocalPortInput
+  - UI_TargetIPInput
+  - UI_NetProtocolDropdowm
+  - table_prococolText
+  - table_remoteText
+  - table_netReceived
+  - table_localPortText
+  - table_COMReceived
+  - table_ForwardTargetText
+  - table_Delete
+  - table_netReceivedStatus
+  IncreaseCollectorID: 0
+  collectorKeys:
+  - id: -1
+    guid: 8c7824cf20eda2e40a65a35a92b20052
+    keys:
+    - UI_DeleteButton
+  - id: -1
+    guid: 7351f2c9cef5cfd4db98acd69c5d256b
+    keys:
+    - UI_DeleteButton
+  - id: -1
+    guid: 0d65d6d5f25e5934e89dc5daedaba9f5
+    keys:
+    - UI_Menu
+  - id: -1
+    guid: d654460f53d1e5f4f9af09b9ff660570
+    keys:
+    - UI_Menu
+  - id: -1
+    guid: c926d38237b1f754886a25b7d62643b2
+    keys:
+    - UI_Menu
+  - id: -1
+    guid: 8eabb53727cc6024286d5fe11fc18083
+    keys:
+    - UI_DeleteButton
+    - UI_AddPort
+    - UI_MenuCancel
+    - UI_OK
+    - UI_Console
+    - UI_clear
+    - UI_Tables
+    - UI_MenuRoot
+    - UI_ConsoleUI
+    - UI_Consolelayout
+    - UI_NetProtrocolTitle
+    - UI_RemotePortInput
+    - UI_LocalPortInput
+    - UI_TargetIPInput
+    - UI_NetProtocolDropdowm
+  - id: -1
+    guid: ead97c791377951419dc7f025be1c6f9
+    keys:
+    - table_prococolText
+  - id: -1
+    guid: e15e3e80ef79d004db95693a4cf03589
+    keys:
+    - table_prococolText
+    - table_remoteText
+    - table_netReceived
+    - table_localPortText
+    - table_COMReceived
+    - table_ForwardTargetText
+    - table_Delete
+    - table_netReceivedStatus
