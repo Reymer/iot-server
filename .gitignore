@@ -2,6 +2,9 @@
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
+hooks
+lfs
+
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
@@ -70,3 +73,21 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+#Fmod
+*/fmod_editor.log
+vr-training-tfaz/Assets/Plugins/FMOD/Cache/Editor/FMODStudioCache.asset
+vr-training-tfaz/Assets/Plugins/FMOD/Cache/Editor/FMODStudioCache.asset
+vr-training-tfaz/tempPath.txt
+*.unitypackage.meta
+vr-training-tfaz/bakery_times.log
+vr-training-tfaz/Assets/Editor/x64/Bakery/.denoiserlog.txt
+vr-training-tfaz/Assets/Editor/x64/Bakery/.ftracelog.txt
+vr-training-tfaz/Assets/Editor/x64/Bakery/hwtestdata/image.lz4
+vr-training-tfaz/Assets/Bakery/ftLocalStorage.asset
+vr-training-tfaz/Assets/Editor/x64/Bakery/.uvgblog.txt
+vr-training-tfaz/Assets/Bakery/ftGlobalStorage.asset
+vr-training-tfaz/Assets/Course_VR360/VR360_Video/2022-03-28-第一次閃爆燃-降噪-銳化高-8K-H.265-修剪.mov
+vr-training-tfaz/Assets/Course_VR360/VR360_Video/2022-03-28-第一次閃爆燃-降噪-銳化高-8K-H.265-修剪.mov.meta
+vr-training-tfaz/Assets/Course_VR360/VR360_Video/2022-07-25-火災成長.mp4
+vr-training-tfaz/Assets/Course_VR360/VR360_Video/2022-07-25-火災成長.mp4.meta

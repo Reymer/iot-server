@@ -1,0 +1,19 @@
+﻿{
+    "buildTypeSelect": -1,
+    "copyAllFolder": true,
+    "copyAllFile": true,
+    "developmentMode": false,
+    "copyDataOnBuild": true,
+    "modifyProductName": false,
+    "addBuildTypeLabel": false,
+    "additionProductName": "",
+    "outputPath": "",
+    "assetBundleManifestPath": "",
+    "ignoreFileExtension": [
+        "meta",
+        "keep"
+    ],
+    "buildTypeDatas": [],
+    "copyFolderDatas": [],
+    "copyFileDatas": []
+}

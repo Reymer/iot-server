@@ -1,0 +1,16 @@
+[
+  {
+    "NetProtocol": "UDP",
+    "LocalPortDetails": {
+      "Port": 1234,
+      "Description": null
+    },
+    "RemotePortDetails": {
+      "Port": 7777,
+      "Description": null
+    },
+    "TargetIP": null,
+    "COMReceived": 0,
+    "NetReceived": 0
+  }
+]
