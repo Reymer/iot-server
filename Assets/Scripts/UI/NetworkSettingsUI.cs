@@ -3,6 +3,7 @@ using System;
 using UnityEngine;
 using TMPro;
 using DevKit.Console;
+using UnityEngine.UI;
 
 public class NetworkSettingsUI : MonoBehaviour
 {
@@ -61,14 +62,12 @@ public class NetworkSettingsUI : MonoBehaviour
 
         if (parentTransform == null) return;
         int childCount = parentTransform.childCount;
-        // Iterate over all children and destroy them
         for (int i = childCount - 1; i >= 0; i--)
         {
             Transform child = parentTransform.GetChild(i);
             Destroy(child.gameObject);
         }
     }
-
 
     private void OnDropdownValueChanged(int index)
     {
@@ -146,6 +145,7 @@ public class NetworkSettingsUI : MonoBehaviour
 
     private void OpenMenu(string uiKey)
     {
+        if (uiCollector.GetAsset<GameObject>(UIKey.UI_MenuRoot).activeSelf) { return; }
         Clear();
         SetUiStatus(true, uiKey);
     }
