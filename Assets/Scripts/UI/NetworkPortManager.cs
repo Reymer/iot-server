@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
+using System.Net;
 using DevKit.Console;
 using DevKit.Tool;
 using Newtonsoft.Json;
@@ -16,9 +18,9 @@ public class NetworkPortManager
     private readonly string filePath;
     private ConsoleUI consoleUI;
     private readonly NetworkConnector networkConnector = new();
-    public readonly Dictionary<int, PortData> tcpServers = new();
-    public readonly Dictionary<int, PortData> udpPorts = new();
-    public readonly Dictionary<int, PortData> tcpClients = new();
+    public readonly Dictionary<string, PortData> tcpServers = new();
+    public readonly Dictionary<string, PortData> tcpClients = new();
+    public readonly Dictionary<string, PortData> udpPorts = new();
     private readonly List<PortData> portDataList = new();
 
     public event Action<PortData> PortDataUpdated;
@@ -44,29 +46,29 @@ public class NetworkPortManager
         public PortDetails LocalPortDetails { get; set; }
         public PortDetails RemotePortDetails { get; set; }
         public string TargetIP { get; set; }
-        [JsonIgnore]
-        public Action<PortData> OnUpdate { get; set; }
         public int COMReceived { get; set; } = 0;
         public int NetReceived { get; set; } = 0;
+        [JsonIgnore]
+        public Action<PortData> OnUpdate { get; set; }
     }
 
     public class PortDetails
     {
-        public int Port { get; set; }
+        public string Port { get; set; }
         public string Description { get; set; }
     }
 
-    public PortData AddPortData(string protocolType, int remotePort, int localPort, string target)
+    public PortData AddPortData(string protocolType, string remotePort, string localPort, string target)
     {
         var data = new PortData
         {
             NetProtocol = protocolType,
             LocalPortDetails = new PortDetails { Port = localPort },
-            RemotePortDetails = new PortDetails { Port = remotePort },
+            RemotePortDetails = new PortDetails { Port = remotePort},
             TargetIP = target,
             COMReceived = 0,
             NetReceived = 0,
-            OnUpdate = OnUpdate 
+            OnUpdate = OnUpdate
         };
 
         AddPortToDictionary(data);
@@ -78,88 +80,127 @@ public class NetworkPortManager
 
     private void AddPortToDictionary(PortData data)
     {
-        if (data.NetProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        if (data.NetProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
-            tcpServers[data.RemotePortDetails.Port] = data;
-            Debug.Log($"Added TCP Server Port: {data.RemotePortDetails.Port}");
+            tcpServers[data.LocalPortDetails.Port] = data;
+        }
+        else if (data.NetProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            tcpClients[data.RemotePortDetails.Port] = data;
         }
         else if (data.NetProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
         {
-            udpPorts[data.RemotePortDetails.Port] = data; // Assuming all UDP ports are treated similarly
-            Debug.Log($"Added UDP Port: {data.RemotePortDetails.Port}");
+            udpPorts[data.RemotePortDetails.Port] = data;
         }
     }
 
-
-    public bool IsPortUnique(string protocolType, int port)
+    public bool IsPortUnique(string protocolType, string remotePort, string localPort)
     {
-        if (protocolType.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
-            return !tcpServers.ContainsKey(port);
+            return !tcpServers.ContainsKey(localPort); 
+        }
+        else if (protocolType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            return !tcpClients.ContainsKey(remotePort);
         }
         else if (protocolType.Equals("UDP", StringComparison.OrdinalIgnoreCase))
         {
-            return !udpPorts.ContainsKey(port);
+            return !udpPorts.ContainsKey(remotePort);
         }
 
         return false;
     }
 
-
-    public void RemovePortData(string netProtocol, int remotePort)
+    public void RemovePortData(string netProtocol, PortData portData)
     {
-        PortData dataToRemove = GetPortData(netProtocol, remotePort);
+        PortData dataToRemove = GetPortData(netProtocol, portData);
 
         if (dataToRemove == null)
         {
-            Debug.LogWarning($"找不到協定為 {netProtocol}，遠端端口為 {remotePort} 的資料。");
+            Debug.LogWarning($"未能找到協定為 {netProtocol} 的端口資料，無法移除。");
             return;
         }
 
-        Debug.Log($"Removing {netProtocol} Port: {remotePort}");
+        string portToRemove = (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+            ? dataToRemove.LocalPortDetails.Port
+            : dataToRemove.RemotePortDetails.Port;
 
-        // 移除事件訂閱
+
+        Debug.Log($"Removing {netProtocol} Port: {portToRemove}");
         dataToRemove.OnUpdate -= OnUpdate;
-
-        RemovePortFromDictionary(netProtocol, remotePort);
+        RemovePortFromDictionary(netProtocol, portToRemove);
 
         bool removedFromList = portDataList.Remove(dataToRemove);
         if (!removedFromList)
         {
-            Debug.LogWarning($"未能成功從清單中移除協定為 {netProtocol}，遠端端口為 {remotePort} 的資料。");
+            Debug.LogWarning($"未能成功從清單中移除協定為 {netProtocol}，端口為 {portToRemove} 的資料。");
         }
-        networkConnector.StopClient(dataToRemove.RemotePortDetails.Port, netProtocol);
+        networkConnector.StopClient(portToRemove, netProtocol);
+
         SavePortDataToFile();
     }
 
-    private PortData GetPortData(string netProtocol, int remotePort)
+
+    private PortData GetPortData(string netProtocol, PortData portData)
     {
-        return netProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase) ? tcpServers.GetValueOrDefault(remotePort) :
-               netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase) ? udpPorts.GetValueOrDefault(remotePort) : null;
+        if (portData == null)
+        {
+            throw new ArgumentNullException(nameof(portData), "PortData cannot be null.");
+        }
+
+        PortData resultPortData = null;
+
+        if (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+        {
+            resultPortData = tcpServers.GetValueOrDefault(portData.LocalPortDetails.Port);
+        }
+        else if (netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
+        {
+            resultPortData = udpPorts.GetValueOrDefault(portData.RemotePortDetails.Port);
+        }
+        else if (netProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            resultPortData = tcpClients.GetValueOrDefault(portData.RemotePortDetails.Port);
+        }
+
+        return resultPortData;
     }
 
-    private void RemovePortFromDictionary(string netProtocol, int remotePort)
+
+    private void RemovePortFromDictionary(string netProtocol, string port)
     {
-        if (netProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        if (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
-            if (tcpServers.Remove(remotePort))
+            if (tcpServers.Remove(port))
             {
-                Debug.Log($"Successfully removed TCP Port: {remotePort}");
+                Debug.Log($"Successfully removed TCP Server on Local Port: {port}");
             }
             else
             {
-                Debug.LogWarning($"TCP Port: {remotePort} not found for removal.");
+                Debug.LogWarning($"TCP Server Local Port: {port} not found for removal.");
+            }
+        }
+        else if (netProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            if (tcpClients.Remove(port))
+            {
+                Debug.Log($"Successfully removed TCP Client on Remote Port: {port}");
+            }
+            else
+            {
+                Debug.LogWarning($"TCP Client Remote Port: {port} not found for removal.");
             }
         }
         else if (netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
         {
-            if (udpPorts.Remove(remotePort))
+            if (udpPorts.Remove(port))
             {
-                Debug.Log($"Successfully removed UDP Port: {remotePort}");
+                Debug.Log($"Successfully removed UDP Port: {port}");
             }
             else
             {
-                Debug.LogWarning($"UDP Port: {remotePort} not found for removal.");
+                Debug.LogWarning($"UDP Port: {port} not found for removal.");
             }
         }
     }
@@ -185,13 +226,14 @@ public class NetworkPortManager
 
     public void AddPortsToNetwork()
     {
-        var allPorts = tcpServers.Values.Concat(udpPorts.Values).ToList();
+        var allPorts = tcpServers.Values.Concat(udpPorts.Values).Concat(tcpClients.Values).ToList();
 
         foreach (var portData in allPorts)
         {
             networkConnector.AddPort(portData);
         }
     }
+
 
     public void LoadFromJson()
     {
@@ -203,9 +245,11 @@ public class NetworkPortManager
                 consoleUI?.AddLog("載入的資料為空。");
                 return;
             }
+
             portDataList.Clear();
             tcpServers.Clear();
             udpPorts.Clear();
+            tcpClients.Clear();
 
             foreach (var data in loadedData)
             {
@@ -216,17 +260,18 @@ public class NetworkPortManager
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to load data from JSON: {ex.Message}");
-            consoleUI?.AddLog("無法載入資料，請檢查文件的格式和路徑。");
+            consoleUI?.AddLog("無法載入資料，請檢查文件的格式和路徑。" + ex);
         }
     }
+
     public void DeInit()
     {
         networkConnector.DeInit();
-        foreach (var portData in tcpServers.Values.Concat(udpPorts.Values))
+        foreach (var portData in tcpServers.Values.Concat(udpPorts.Values).Concat(tcpClients.Values))
         {
             portData.OnUpdate -= OnUpdate;
         }
+
         PortDataUpdated = null;
         SavePortDataToFile();
     }
@@ -238,7 +283,6 @@ public class NetworkPortManager
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to save port data to JSON: {ex.Message}");
             consoleUI?.AddLog("無法保存端口資料。");
         }
     }

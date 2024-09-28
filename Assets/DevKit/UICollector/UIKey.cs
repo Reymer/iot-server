@@ -25,6 +25,12 @@ namespace DevKit.Tool
         
         public const string UI_Consolelayout = "UI_Consolelayout";
         
+        public const string UI_TargetIPMask = "UI_TargetIPMask";
+        
+        public const string UI_RemotePortsMask = "UI_RemotePortsMask";
+        
+        public const string UI_LocalPortsMask = "UI_LocalPortsMask";
+        
         public const string UI_NetProtrocolTitle = "UI_NetProtrocolTitle";
         
         public const string UI_RemotePortInput = "UI_RemotePortInput";

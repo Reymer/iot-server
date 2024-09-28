@@ -1,26 +1,27 @@
 using DevKit.Tool;
 using System;
 using UnityEngine;
+using static NetworkPortManager;
 
 public class Table : MonoBehaviour
 {
     public UICollector uiCollector;
 
     private string protocolType;
-    private int remotePort;
-    private int localPort;
+    private string remotePort;
+    private string localPort;
     private int receivedCount;
     private int comReceivedCount;
     private string receivedStatus;
     private string targetIP;
-    public Action<string, int> delete;
+    public Action<string, PortData> delete;
 
     private void Start()
     {
         Subscribe();
     }
 
-    public void Init(string protocolType, int remotePort, int localPort, string targetIP, int comReceivedCount, int receivedCount, string receivedStatus)
+    public void Init(string protocolType, string remotePort, string localPort, string targetIP, int comReceivedCount, int receivedCount, string receivedStatus)
     {
         this.protocolType = protocolType;
         this.remotePort = remotePort;
@@ -36,7 +37,16 @@ public class Table : MonoBehaviour
     {
         if (uiCollector != null)
         {
-            uiCollector.BindOnCheck(UIKey.table_Delete, () => { Delete(protocolType, remotePort); });
+            uiCollector.BindOnCheck(UIKey.table_Delete, () => Delete(protocolType, new PortData
+            {
+                NetProtocol = protocolType,
+                RemotePortDetails = new PortDetails { Port = remotePort },
+                LocalPortDetails = new PortDetails { Port = localPort },
+                TargetIP = targetIP,
+                COMReceived = comReceivedCount,
+                NetReceived = receivedCount,
+                OnUpdate = null
+            }));
         }
     }
 
@@ -54,9 +64,9 @@ public class Table : MonoBehaviour
         }
     }
 
-    public void Delete(string protocolType, int remotePort)
+    public void Delete(string protocolType, PortData portData)
     {
-        delete?.Invoke(protocolType, remotePort);
+        delete?.Invoke(protocolType, portData);
     }
 
     public void SetValue(string uiKey, string content)

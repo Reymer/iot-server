@@ -3,17 +3,19 @@ using System;
 using UnityEngine;
 using TMPro;
 using DevKit.Console;
-using UnityEngine.UI;
+using System.Net.Sockets;
+using System.Net;
+using Random = System.Random;
 
 public class NetworkSettingsUI : MonoBehaviour
 {
     private UICollector uiCollector;
-    public Action<string, int, int, string> confirm;
+    private ConsoleUI consoleUi;
+    public event Action<string, string, string, string> Confirm;
     private string protocolType = "UDP";
     private int? remotePort;
     private int? localPort;
     private string targetIP;
-    private ConsoleUI consoleUi;
     private bool isOpenConsole = true;
 
     private void Start()
@@ -36,7 +38,7 @@ public class NetworkSettingsUI : MonoBehaviour
         uiCollector.BindOnCheck(UIKey.UI_DeleteButton, () => CloseMenu(UIKey.UI_MenuRoot));
         uiCollector.BindOnCheck(UIKey.UI_MenuCancel, () => CloseMenu(UIKey.UI_MenuRoot));
         uiCollector.BindOnCheck(UIKey.UI_AddPort, () => OpenMenu(UIKey.UI_MenuRoot));
-        uiCollector.BindOnCheck(UIKey.UI_OK, Confirm);
+        uiCollector.BindOnCheck(UIKey.UI_OK, OnConfirm);
         uiCollector.BindOnCheck(UIKey.UI_Console, OnConsole);
         uiCollector.BindOnCheck(UIKey.UI_clear, OnClearConsole);
         uiCollector.GetAsset<TMP_Dropdown>(UIKey.UI_NetProtocolDropdowm).onValueChanged.AddListener(OnDropdownValueChanged);
@@ -71,7 +73,36 @@ public class NetworkSettingsUI : MonoBehaviour
 
     private void OnDropdownValueChanged(int index)
     {
-        protocolType = index == 0 ? "UDP" : "TCP";
+        switch (index)
+        {
+            case 0:
+                protocolType = "UDP";
+                SetUiStatus(true, UIKey.UI_TargetIPMask);
+                SetUiStatus(false, UIKey.UI_RemotePortsMask);
+                SetUiStatus(false, UIKey.UI_LocalPortsMask);
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_RemotePortInput).text = string.Empty;
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_LocalPortInput).text = string.Empty;
+                break;
+            case 1:
+                protocolType = "TCP Server";
+                var remotePort = GetRandomAvailablePort().ToString();
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_RemotePortInput).text = remotePort;
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_LocalPortInput).text = string.Empty;
+                SetUiStatus(true, UIKey.UI_TargetIPMask);
+                SetUiStatus(true, UIKey.UI_RemotePortsMask);
+                SetUiStatus(false, UIKey.UI_LocalPortsMask);
+                break;
+            case 2:
+                protocolType = "TCP Client";
+                var localPort = GetRandomAvailablePort().ToString();
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_LocalPortInput).text = localPort;
+                uiCollector.GetAsset<TMP_InputField>(UIKey.UI_RemotePortInput).text = string.Empty;
+                SetUiStatus(false, UIKey.UI_TargetIPMask);
+                SetUiStatus(false, UIKey.UI_RemotePortsMask);
+                SetUiStatus(true, UIKey.UI_LocalPortsMask);
+                break;
+        }
+        Debug.Log(protocolType);
     }
 
     private void OnRemotePortInput(string value)
@@ -116,21 +147,36 @@ public class NetworkSettingsUI : MonoBehaviour
         return true;
     }
 
-    private void Confirm()
+    private void OnConfirm()
     {
-        if (!remotePort.HasValue || !localPort.HasValue)
+        if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase) && !remotePort.HasValue)
         {
-            consoleUi.AddLog("連接埠號碼無效。請檢查輸入");
+            consoleUi.AddLog("遠程端口號碼無效。請檢查輸入");
             return;
         }
-        if (!string.IsNullOrEmpty(targetIP) && !IsValidIPv4(targetIP))
+
+        if (protocolType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase) && !localPort.HasValue)
         {
-            consoleUi.AddLog("IP 位址無效。請輸入有效的 IPv4 位址。");
+            consoleUi.AddLog("本地端口號碼無效。請檢查輸入");
             return;
         }
-        confirm?.Invoke(protocolType, remotePort.Value, localPort.Value, targetIP);
+
+        if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+        {
+            Confirm?.Invoke(protocolType, "--", localPort.ToString(), targetIP);
+        }
+        else if(protocolType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            Confirm?.Invoke(protocolType, remotePort.ToString(), "--", targetIP);
+        }
+        else
+        {
+            Confirm?.Invoke(protocolType, remotePort.ToString(), localPort.ToString(), targetIP = string.Empty);
+        }
+
         CloseMenu(UIKey.UI_MenuRoot);
     }
+
 
     private void OnConsole()
     {
@@ -163,8 +209,11 @@ public class NetworkSettingsUI : MonoBehaviour
         localPort = null;
         targetIP = null;
         protocolType = "UDP";
+        SetUiStatus(true, UIKey.UI_TargetIPMask);
+        SetUiStatus(false, UIKey.UI_RemotePortsMask);
+        SetUiStatus(false, UIKey.UI_LocalPortsMask);
         protocolDropdown.value = 0;
-        protocolDropdown.RefreshShownValue(); 
+        protocolDropdown.RefreshShownValue();
     }
 
     private void SetUiStatus(bool status, string uiKey)
@@ -173,5 +222,40 @@ public class NetworkSettingsUI : MonoBehaviour
         {
             uiCollector.SetActive(uiKey, status);
         }
+    }
+
+    private int GetRandomAvailablePort()
+    {
+        var random = new Random();
+        int port;
+
+        while (true)
+        {
+            port = random.Next(49152, 65535); // 随机选择一个动态端口范围
+            if (IsPortAvailable(port)) // 检查端口是否可用
+            {
+                break;
+            }
+        }
+
+        return port;
+    }
+
+    private bool IsPortAvailable(int port)
+    {
+        bool isAvailable = true;
+
+        try
+        {
+            TcpListener listener = new(IPAddress.Any, port);
+            listener.Start();
+            listener.Stop();
+        }
+        catch (SocketException)
+        {
+            isAvailable = false; // 如果抛出异常，表示端口被占用
+        }
+
+        return isAvailable;
     }
 }
