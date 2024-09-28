@@ -16,19 +16,17 @@ public class NetworkPortTableUIManager : MonoBehaviour
         prefabManager = GameObject.FindObjectOfType<PortTablePrefabManager>();
         networkSettingUI = GameObject.FindObjectOfType<NetworkSettingsUI>();
         uiCollector = GetComponent<UICollector>();
-        networkSettingUI.confirm += OnConfirm;
+        networkSettingUI.Confirm += OnConfirm;
         NetworkPortManager.Instance.PortDataUpdated += OnUpdate;
         NetworkPortManager.Instance.LoadFromJson();
         NetworkPortManager.Instance.InstantiateTables(prefabManager, uiCollector);
         NetworkPortManager.Instance.AddPortsToNetwork();
     }
 
-    private void OnConfirm(string protocolType, int remotePort, int localPort, string targetIP)
+    private void OnConfirm(string protocolType, string remotePort, string localPort, string targetIP)
     {
-        if (NetworkPortManager.Instance.IsPortUnique(protocolType, remotePort))
+        if (NetworkPortManager.Instance.IsPortUnique(protocolType, remotePort, localPort))
         {
-            consoleUI.AddLog($"成功創建 協議類型: {protocolType}, 端口號: {remotePort} 的 監聽");
-
             var portData = NetworkPortManager.Instance.AddPortData(protocolType, remotePort, localPort, targetIP);
             prefabManager.InstantiatePortTable(uiCollector, portData);
         }
@@ -38,10 +36,10 @@ public class NetworkPortTableUIManager : MonoBehaviour
         }
     }
 
-    public void OnRemove(string netProtocol, int remotePort)
+    public void OnRemove(string netProtocol, PortData portData)
     {
         prefabManager.RefreshAndRecreateTables(uiCollector);
-        NetworkPortManager.Instance.RemovePortData(netProtocol, remotePort);
+        NetworkPortManager.Instance.RemovePortData(netProtocol, portData);
         NetworkPortManager.Instance.RefreshAndRecreateTables(prefabManager, uiCollector);
     }
 
@@ -55,7 +53,7 @@ public class NetworkPortTableUIManager : MonoBehaviour
     {
         if (networkSettingUI != null)
         {
-            networkSettingUI.confirm -= OnConfirm;
+            networkSettingUI.Confirm -= OnConfirm;
             NetworkPortManager.Instance.PortDataUpdated -= OnUpdate;
         }
     }

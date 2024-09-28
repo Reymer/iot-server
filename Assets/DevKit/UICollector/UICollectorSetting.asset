@@ -27,6 +27,9 @@ MonoBehaviour:
   - UI_MenuRoot
   - UI_ConsoleUI
   - UI_Consolelayout
+  - UI_TargetIPMask
+  - UI_RemotePortsMask
+  - UI_LocalPortsMask
   - UI_NetProtrocolTitle
   - UI_RemotePortInput
   - UI_LocalPortInput
@@ -75,6 +78,9 @@ MonoBehaviour:
     - UI_MenuRoot
     - UI_ConsoleUI
     - UI_Consolelayout
+    - UI_TargetIPMask
+    - UI_RemotePortsMask
+    - UI_LocalPortsMask
     - UI_NetProtrocolTitle
     - UI_RemotePortInput
     - UI_LocalPortInput

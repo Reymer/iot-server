@@ -15,56 +15,90 @@ public class NetworkConnector
 {
     private ConsoleUI consoleUI;
 
-    #region 資料結構TCP、UDP
+    #region 資料結構 TCP Client、TCP Server、UDP
     public class UdpData : IDisposable
     {
-        public UdpClient UdpClient;
+        public UdpClient udpClient;
         public CancellationTokenSource CancellationTokenSource = new();
         public string SourceData = string.Empty;
         private bool disposed = false;
 
         public void Dispose()
         {
-            if (!disposed)
+            if (disposed) return;
+            disposed = true;
+            CancellationTokenSource.Cancel();
+            udpClient?.Close();
+            udpClient?.Dispose();
+            CancellationTokenSource.Dispose();
+        }
+    }
+
+    public class TCPServerData : IDisposable
+    {
+        public TcpListener TcpListener;
+        public CancellationTokenSource CancellationTokenSource = new();
+        public string SourceData = string.Empty;
+        private bool disposed = false;
+        private readonly object lockObj = new();
+
+        public void Dispose()
+        {
+            lock (lockObj)
             {
+                if (disposed) return;
                 disposed = true;
-                CancellationTokenSource.Cancel();
-                CancellationTokenSource.Dispose();
-                UdpClient?.Close();
-                UdpClient?.Dispose();
+
+                if (CancellationTokenSource != null && !CancellationTokenSource.IsCancellationRequested)
+                {
+                    CancellationTokenSource.Cancel();
+                    CancellationTokenSource.Dispose();
+                }
+
+                TcpListener?.Stop();
+                TcpListener?.Server?.Dispose();
+            }
+        }
+    }
+
+    public class TCPClinetData : IDisposable
+    {
+        public TcpClient tcpClient;
+        public CancellationTokenSource CancellationTokenSource = new();
+        private bool disposed = false;
+        private readonly object lockObj = new();
+        public string remotePort = string.Empty;
+        public string remoteIP = string.Empty;
+        public bool IsStopped { get; set; } = false;
+        public void Dispose()
+        {
+            lock (lockObj)
+            {
+                if (disposed) return;
+                disposed = true;
+
+                if (CancellationTokenSource != null && !CancellationTokenSource.IsCancellationRequested)
+                {
+                    CancellationTokenSource.Cancel();
+                    CancellationTokenSource.Dispose();
+                }
+                tcpClient.Close();
+                tcpClient.Dispose();
             }
         }
     }
     public void Init(ConsoleUI consoleUI)
     {
         this.consoleUI = consoleUI;
-    }
-
-    public class TCPData : IDisposable
-{
-    public TcpListener TcpListener;
-    public CancellationTokenSource CancellationTokenSource = new();
-    public string SourceData = string.Empty;
-    private bool disposed = false;
-
-    public void Dispose()
-    {
-        if (disposed) return;
-        disposed = true;
-
-        CancellationTokenSource.Cancel();
-        CancellationTokenSource.Dispose();      
-        TcpListener?.Stop();
-        TcpListener?.Server?.Dispose(); 
-    }
-}
+    }   
 
     #endregion
 
     #region 資料字典存取
     public enum ConnectionType { UDP, TCP }
-    private readonly ConcurrentDictionary<int, UdpData> udpClients = new();
-    private readonly ConcurrentDictionary<int, TCPData> tcpClients = new();
+    private readonly ConcurrentDictionary<string, UdpData> udpClients = new();
+    private readonly ConcurrentDictionary<string, TCPServerData> tcpServerdatas = new();
+    private readonly ConcurrentDictionary<string, TCPClinetData> tcpClientdatas = new();
 
     #endregion
 
@@ -76,19 +110,83 @@ public class NetworkConnector
     /// <param name="connectionType">連接類型 (TCP 或 UDP)</param>
     public void AddPort(PortData portData)
     {
-        if (portData.NetProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
+        switch (portData.NetProtocol.ToUpperInvariant())
         {
-            AddUdpClient(portData);
-        }
-        else if (portData.NetProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
-        {
-            AddTcpListener(portData);
-        }
-        else
-        {
-            LogOnMainThread($"無法識別的連接類型: {portData.NetProtocol}", isError: true);
+            case "UDP":
+                AddUdpClient(portData);
+                break;
+            case "TCP CLIENT":
+                AddTcpClient(portData);
+                break;
+            case "TCP SERVER":
+                AddTcpListener(portData);
+                break;
+            default:
+                LogOnMainThread($"無法識別的連接類型: {portData.NetProtocol}", isError: true);
+                break;
         }
     }
+
+    private async void AddTcpClient(PortData portData)
+    {
+        if (tcpClientdatas.ContainsKey(portData.RemotePortDetails.Port))
+        {
+            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 客戶端已經存在。");
+            return;
+        }
+        LogOnMainThread($"在端口 {portData.RemotePortDetails.Port} 上啟動了 TCP 客戶端。");
+        int maxRetries = 5;
+        int retryDelay = 2000;
+        int attempt = 0;
+        bool connected = false;
+
+        // 初始化新的 TCPClinetData
+        var tcpClientData = new TCPClinetData
+        {
+            remoteIP = portData.TargetIP,
+            remotePort = portData.RemotePortDetails.Port,
+            CancellationTokenSource = new CancellationTokenSource()
+        };
+
+        tcpClientdatas.TryAdd(portData.RemotePortDetails.Port, tcpClientData);
+
+        while (attempt < maxRetries && !connected)
+        {
+            attempt++;
+
+            // 每次重連前檢查是否已經停止
+            if (tcpClientData.IsStopped)
+            {
+                LogOnMainThread($"TCP 客戶端停止重連，端口: {portData.RemotePortDetails.Port}");
+                return;
+            }
+
+            try
+            {
+                var tcpClient = new TcpClient();
+                await tcpClient.ConnectAsync(portData.TargetIP, int.Parse(portData.RemotePortDetails.Port));
+
+                tcpClientData.tcpClient = tcpClient;
+                LogOnMainThread($"已連接到 TCP 客戶端: {portData.TargetIP}:{portData.RemotePortDetails.Port}");
+                connected = true;
+            }
+            catch (Exception ex)
+            {
+                LogOnMainThread($"初始化 TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 時發生錯誤: {ex.Message}。重試次數: {attempt}/{maxRetries}", isError: true);
+
+                if (attempt < maxRetries)
+                {
+                    await Task.Delay(retryDelay);
+                }
+                else
+                {
+                    LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 無法連接，已達到最大重試次數。", isError: true);
+                    tcpClientdatas.TryRemove(portData.RemotePortDetails.Port, out _);
+                }
+            }
+        }
+    }
+
 
     /// <summary>
     /// 新增單個 TCP 監聽器
@@ -96,42 +194,40 @@ public class NetworkConnector
     /// <param name="remotePort">要新增的端口</param>
     private void AddTcpListener(PortData portData)
     {
-        if (tcpClients.ContainsKey(portData.RemotePortDetails.Port))
+        if (tcpServerdatas.ContainsKey(portData.LocalPortDetails.Port))
         {
-            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 已經存在 TCP 監聽器。");
+            LogOnMainThread($"端口 {portData.LocalPortDetails.Port} 已經存在 TCP 監聽器。");
             return;
         }
-
         try
         {
-            var tcpListener = new TcpListener(IPAddress.Any, portData.RemotePortDetails.Port);
+            var tcpListener = new TcpListener(IPAddress.Any, int.Parse(portData.LocalPortDetails.Port));
             tcpListener.Start();
-            var tcpData = new TCPData
+            var tcpServerData = new TCPServerData
             {
                 TcpListener = tcpListener,
+                CancellationTokenSource = new CancellationTokenSource()
             };
-
-            if (tcpClients.TryAdd(portData.RemotePortDetails.Port, tcpData))
+            if (tcpServerdatas.TryAdd(portData.LocalPortDetails.Port, tcpServerData))
             {
-                LogOnMainThread($"在目標端口 {portData.RemotePortDetails.Port} 上啟動了 TCP 監聽器。");
-                Task.Run(() => ListenForTcpClients(portData, tcpData));
+                LogOnMainThread($"在端口 {portData.LocalPortDetails.Port} 上啟動了 TCP 伺服器端。");
+                Task.Run(() => ListenForTcpClients(portData, tcpServerData));
             }
             else
             {
                 tcpListener.Stop();
-                LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 上的 TCP 監聽器已經存在。");
+                LogOnMainThread($"端口 {portData.LocalPortDetails.Port} 上的 TCP 監聽器已經存在。");
             }
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
         {
-            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 已經被使用。", isError: true);
+            LogOnMainThread($"端口 {portData.LocalPortDetails.Port} 已經被使用。", isError: true);
         }
         catch (Exception ex)
         {
-            LogOnMainThread($"初始化端口 {portData.RemotePortDetails.Port} 的 TCP 監聽器時發生錯誤: {ex.Message}", isError: true);
+            LogOnMainThread($"初始化端口 {portData.LocalPortDetails.Port} 的 TCP 監聽器時發生錯誤: {ex.Message}", isError: true);
         }
-    }
-
+    }  
     /// <summary>
     /// 新增單個 UDP 客戶端
     /// </summary>
@@ -142,8 +238,8 @@ public class NetworkConnector
         {
             try
             {
-                var udpClient = new UdpClient(new IPEndPoint(IPAddress.Any, portData.RemotePortDetails.Port));
-                UdpData udpData = new() { UdpClient = udpClient };
+                var udpClient = new UdpClient(new IPEndPoint(IPAddress.Any, int.Parse(portData.RemotePortDetails.Port)));
+                UdpData udpData = new() { udpClient = udpClient };
 
                 if (udpClients.TryAdd(portData.RemotePortDetails.Port, udpData))
                 {
@@ -175,7 +271,7 @@ public class NetworkConnector
     /// </summary>
     /// <param name="port">端口號</param>
     /// <param name="connectionType">連接類型，"TCP" 或 "UDP"</param>
-    public void StopClient(int port, string connectionType)
+    public void StopClient(string port, string connectionType)
     {
         try
         {
@@ -183,9 +279,18 @@ public class NetworkConnector
             {
                 DisposeClientResources(port, udpClients, "UDP");
             }
-            else if (connectionType.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+            else if (connectionType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
             {
-                DisposeClientResources(port, tcpClients, "TCP");
+                DisposeClientResources(port, tcpServerdatas, "TCP");
+            }
+            else if (connectionType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+            {
+                if (tcpClientdatas.TryGetValue(port, out TCPClinetData clientData))
+                {
+                    clientData.IsStopped = true;
+                }
+
+                DisposeClientResources(port, tcpClientdatas, "TCP");
             }
         }
         catch (Exception ex)
@@ -193,12 +298,27 @@ public class NetworkConnector
             LogOnMainThread($"停止客戶端時出現錯誤: {ex.Message}", isError: true);
         }
     }
-    private void DisposeClientResources<T>(int port, ConcurrentDictionary<int, T> clientDictionary, string protocol) where T : IDisposable
+    private void DisposeClientResources<T>(string port, ConcurrentDictionary<string, T> clientDictionary, string protocol) where T : IDisposable
     {
         if (clientDictionary.TryRemove(port, out T clientData))
         {
+            if (clientData is UdpData udpData)
+            {
+                udpData.CancellationTokenSource.Cancel();
+                LogOnMainThread($"已停止並刪除 UDP 端口 {port} 上的 {protocol}。");
+            }
+            else if (clientData is TCPServerData tcpServerData)
+            {
+                tcpServerData.CancellationTokenSource.Cancel();
+                LogOnMainThread($"已停止並刪除 TCP 伺服器端口 {port} 上的 {protocol}。");
+            }
+            else if (clientData is TCPClinetData tcpClientData)
+            {
+                tcpClientData.CancellationTokenSource.Cancel();
+                LogOnMainThread($"已停止並刪除 TCP 客戶端端口 {port} 上的 {protocol}。");
+            }
+
             clientData.Dispose();
-            LogOnMainThread($"已停止並刪除端口 {port} 上的 {protocol} 客戶端。");
         }
         else
         {
@@ -213,20 +333,24 @@ public class NetworkConnector
     /// <summary>
     /// 監聽 TCP 客戶端
     /// </summary>
-    /// <param name="tcpData">TCP 資料</param>
+    /// <param name="tcpServerData">TCP 資料</param>
     /// <param name="remotePort">端口</param>
-    private async Task ListenForTcpClients(PortData portData, TCPData tcpData)
+    private async Task ListenForTcpClients(PortData portData, TCPServerData tcpServerData)
     {
         try
         {
-            while (!tcpData.CancellationTokenSource.Token.IsCancellationRequested)
+            while (!tcpServerData.CancellationTokenSource.Token.IsCancellationRequested)
             {
-                await HandleTcpClientConnection(portData, tcpData);
+                await HandleTcpClientConnection(portData, tcpServerData);
             }
         }
         catch (OperationCanceledException)
         {
             LogOnMainThread("TCP 監聽器已取消。");
+        }
+        catch (ObjectDisposedException)
+        {
+            LogOnMainThread("TCP 監聽器已被處置。");
         }
         catch (Exception ex)
         {
@@ -234,24 +358,21 @@ public class NetworkConnector
         }
         finally
         {
-            tcpData.CancellationTokenSource?.Cancel();
-            tcpData.CancellationTokenSource?.Dispose();
-
-            if (tcpData.TcpListener != null)
+            lock (tcpServerData)
             {
-                tcpData.TcpListener.Stop();
-                tcpData.TcpListener = null;
+                if (tcpServerData != null && !tcpServerData.CancellationTokenSource.IsCancellationRequested)
+                {
+                    tcpServerData.CancellationTokenSource.Cancel();
+                }
+                tcpServerData.Dispose();
             }
-
-            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 監聽器已關閉。");
         }
     }
-    private async Task HandleTcpClientConnection(PortData portData, TCPData tcpData)
+    private async Task HandleTcpClientConnection(PortData portData, TCPServerData tcpData)
     {
         try
         {
             var client = await tcpData.TcpListener.AcceptTcpClientAsync().WithCancellation(tcpData.CancellationTokenSource.Token);
-            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 上的客戶端已連接");
             await ReceiveTcpMessages(portData, client, tcpData);
         }
         catch (Exception ex) when (ex is OperationCanceledException ||
@@ -266,76 +387,79 @@ public class NetworkConnector
         }
     }
 
-    private async Task ReceiveTcpMessages(PortData portData, TcpClient client, TCPData tcpData)
+    private async Task ReceiveTcpMessages(PortData portData, TcpClient client, TCPServerData tcpServerData)
     {
-        var buffer = new byte[2048];
-        using NetworkStream stream = client.GetStream();
-        IPEndPoint remoteEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+        IPEndPoint remoteEndPoint = client.Client.LocalEndPoint as IPEndPoint;
         string sourceIP = remoteEndPoint?.Address.ToString();
         int sourcePort = remoteEndPoint?.Port ?? 0;
-        while (!tcpData.CancellationTokenSource.Token.IsCancellationRequested)
-        {
-            try
-            {
-                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, tcpData.CancellationTokenSource.Token);
-                if (bytesRead > 0)
-                {
-                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    tcpData.SourceData = string.Empty;
-                    tcpData.SourceData = message;
-                    LogOnMainThread($"TCP 收到訊息來自: IP {sourceIP}, Port {sourcePort}, 訊息: {message}");
-                    await ForwardMessageToClient(tcpData, portData);
-                }
-            }
-            catch (IOException ex)
-            {
-                LogOnMainThread($"TCP 連接中斷: {ex.Message}");
-                break;
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-        }
-        client.Close();
-    }
-    private async Task ForwardMessageToClient(TCPData tcpData, PortData portData)
-    {
-        if (string.IsNullOrEmpty(portData.TargetIP)) return; // Ensure target IP is valid
-
-        TcpClient tcpClient = null;
 
         try
         {
-            tcpClient = new TcpClient();
-            await tcpClient.ConnectAsync(portData.TargetIP, portData.RemotePortDetails.Port);
+            var buffer = new byte[2048];
+            using NetworkStream stream = client.GetStream();
 
-            if (!tcpClient.Connected)
+            while (!tcpServerData.CancellationTokenSource.Token.IsCancellationRequested)
             {
-                LogOnMainThread("連接未成功，無法轉發資料。", isError: true);
-                return;
+                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, tcpServerData.CancellationTokenSource.Token);
+                if (bytesRead > 0)
+                {
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    tcpServerData.SourceData = message;
+                    LogOnMainThread($"TCP 收到訊息來自: IP {sourceIP}, Port {sourcePort}, 訊息: {message}");
+                    if (tcpClientdatas.Count > 0)
+                    {
+                        SendMessageToAllClients(portData, tcpServerData);
+                    }
+                    else
+                    {
+                        LogOnMainThread("沒有可用的 TCP 客戶端，無法發送訊息。");
+                    }
+                }
             }
-
-            using NetworkStream targetStream = tcpClient.GetStream();
-            byte[] messageBytes = Encoding.UTF8.GetBytes(tcpData.SourceData);
-            await targetStream.WriteAsync(messageBytes, 0, messageBytes.Length);
-            LogOnMainThread($"轉發資料到 {portData.TargetIP}:{portData.RemotePortDetails.Port}: {tcpData.SourceData}");
         }
-        catch (SocketException ex)
+        catch (IOException ex)
         {
-            LogOnMainThread($"轉發資料到目標電腦失敗: {ex.Message}", isError: true);
-        }
-        catch (Exception ex)
-        {
-            LogOnMainThread($"轉發資料時發生錯誤: {ex.Message}", isError: true);
+            LogOnMainThread($"接收 TCP 訊息時出現錯誤: {ex.Message}", isError: true);
         }
         finally
         {
-            tcpClient?.Close();
+            // Ensure the client is closed when done
+            client.Close();
+            LogOnMainThread($"TCP 客戶端已關閉: IP {sourceIP}, Port {sourcePort}");
+        }
+    }
+
+    private void SendMessageToAllClients(PortData portData, TCPServerData tcpServerData)
+    {
+        if (!tcpClientdatas.ContainsKey(portData.LocalPortDetails.Port))
+        {
+            LogOnMainThread($"沒有可用的 TCP 客戶端!", isError: true);
+            return;
+        }
+
+        var tcpClient = tcpClientdatas[portData.LocalPortDetails.Port];
+        if (tcpClient.tcpClient.Connected)
+        {
+            try
+            {
+                var buffer = Encoding.UTF8.GetBytes(tcpServerData.SourceData);
+                NetworkStream stream = tcpClient.tcpClient.GetStream();
+                stream.Write(buffer, 0, buffer.Length);
+                LogOnMainThread($"訊息已傳送到客戶端: {tcpClient.tcpClient.Client.RemoteEndPoint}");
+            }
+            catch (Exception ex)
+            {
+                LogOnMainThread($"發送訊息到 TCP 客戶端時出現錯誤: {ex.Message}", isError: true);
+            }
+        }
+        else
+        {
+            LogOnMainThread($"TCP 客戶端已斷開連接: {tcpClient.tcpClient.Client.RemoteEndPoint}", isError: true);
         }
     }
 
     #endregion
+
 
     #region UDP 方法
 
@@ -348,13 +472,13 @@ public class NetworkConnector
     {
         using (var sendClient = new UdpClient())
         {
-            IPEndPoint sendEndPoint = new(IPAddress.Loopback, portData.LocalPortDetails.Port);
+            IPEndPoint sendEndPoint = new(IPAddress.Loopback, int.Parse(portData.LocalPortDetails.Port));
 
             while (!udpData.CancellationTokenSource.Token.IsCancellationRequested)
             {
                 try
                 {
-                    var result = await udpData.UdpClient.ReceiveAsync().WithCancellation(udpData.CancellationTokenSource.Token);
+                    var result = await udpData.udpClient.ReceiveAsync().WithCancellation(udpData.CancellationTokenSource.Token);
                     string message = Encoding.UTF8.GetString(result.Buffer);
                     int messageLength = result.Buffer.Length;
                     portData.COMReceived += messageLength;
@@ -399,7 +523,7 @@ public class NetworkConnector
     /// <param name="length"></param>
     /// <param name="connectionType"></param>
     /// <returns></returns>
-    public string GetSourceData(int port, int length, ConnectionType connectionType)
+    public string GetSourceData(string port, int length, ConnectionType connectionType)
     {
         if (length <= 0)
         {
@@ -417,7 +541,7 @@ public class NetworkConnector
                 udpData.SourceData = string.Empty;
             }
         }
-        else if (connectionType == ConnectionType.TCP && tcpClients.TryGetValue(port, out TCPData tcpData))
+        else if (connectionType == ConnectionType.TCP && tcpServerdatas.TryGetValue(port, out TCPServerData tcpData))
         {
             lock (tcpData)
             {
@@ -442,23 +566,31 @@ public class NetworkConnector
     private async Task ShutdownClientsAsync()
     {
         var udpDisposalTasks = new List<Task>();
-        var tcpDisposalTasks = new List<Task>();
+        var tcpServerDisposalTasks = new List<Task>();
+        var tcpClientDisposalTasks = new List<Task>();
 
         foreach (var udpData in udpClients.Values)
         {
             udpDisposalTasks.Add(Task.Run(() => udpData.Dispose()));
         }
 
-        foreach (var tcpData in tcpClients.Values)
+        foreach (var tcpServerData in tcpServerdatas.Values)
         {
-            tcpDisposalTasks.Add(Task.Run(() => tcpData.Dispose()));
+            tcpServerDisposalTasks.Add(Task.Run(() => tcpServerData.Dispose()));
+        }
+
+        foreach(var tcpClientData in tcpClientdatas.Values)
+        {
+            tcpClientDisposalTasks.Add(Task.Run(() => tcpClientData.Dispose()));
         }
 
         await Task.WhenAll(udpDisposalTasks);
-        await Task.WhenAll(tcpDisposalTasks);
+        await Task.WhenAll(tcpServerDisposalTasks);
+        await Task.WhenAll(tcpClientDisposalTasks);
 
         udpClients.Clear();
-        tcpClients.Clear();
+        tcpServerdatas.Clear();
+        tcpClientdatas.Clear();
 
         Debug.Log("All clients successfully shut down.");
     }
@@ -467,19 +599,35 @@ public class NetworkConnector
     #region 日誌封裝
     private void LogOnMainThread(string message, bool isError = false)
     {
+        string formattedMessage = FormatLogMessage(message, isError);
+
         UnityMainThreadDispatcher.Instance().Enqueue(() =>
         {
             if (isError)
             {
-                Debug.LogError(message);
+                Debug.LogError(formattedMessage);
             }
             else
             {
-                Debug.Log(message);
+                Debug.Log(formattedMessage);
             }
-            consoleUI.AddLog(message);
+            consoleUI.AddLog(formattedMessage);
         });
     }
+
+    /// <summary>
+    /// 格式化日誌訊息
+    /// </summary>
+    /// <param name="message">原始訊息</param>
+    /// <param name="isError">是否為錯誤訊息</param>
+    /// <returns>格式化後的訊息</returns>
+    private string FormatLogMessage(string message, bool isError)
+    {
+        string timeStamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        string errorLabel = isError ? "[Error]" : "[Info]";
+        return $"[{timeStamp}] {errorLabel} {message}";
+    }
+
     #endregion
 
     #region 退出應用

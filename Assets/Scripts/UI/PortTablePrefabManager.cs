@@ -30,7 +30,7 @@ public class PortTablePrefabManager : MonoBehaviour
         if (instance.TryGetComponent<Table>(out var table))
         {
             table.Init(portData.NetProtocol, portData.RemotePortDetails.Port, portData.LocalPortDetails.Port, portData.TargetIP, portData.COMReceived, portData.NetReceived, "Connecting");
-            table.delete += (protocol, remotePort) => DeletePort(protocol, remotePort);
+            table.delete += (protocol, PortData) => DeletePort(protocol, portData);
         }
     }
 
@@ -45,11 +45,11 @@ public class PortTablePrefabManager : MonoBehaviour
         }
     }
 
-    public void DeletePort(string protocolType, int remotePort)
+    public void DeletePort(string protocolType, PortData portData)
     {
         if (portTableUIManager != null)
         {
-            portTableUIManager.OnRemove(protocolType, remotePort);
+            portTableUIManager.OnRemove(protocolType, portData);
         }
     }
 }

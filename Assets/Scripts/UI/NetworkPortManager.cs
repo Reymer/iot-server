@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Sockets;
+using System.Net;
 using DevKit.Console;
 using DevKit.Tool;
 using Newtonsoft.Json;
@@ -13,18 +15,18 @@ public class NetworkPortManager
 
     public static NetworkPortManager Instance => instance.Value;
 
-    private readonly string filePath; // JSON 文件的路徑
-    private ConsoleUI consoleUI; // 控制台 UI
-    private readonly NetworkConnector networkConnector = new(); // 網路連接器
-    public readonly Dictionary<int, PortData> tcpPorts = new(); // 儲存 TCP 端口資料的字典
-    public readonly Dictionary<int, PortData> udpPorts = new(); // 儲存 UDP 端口資料的字典
-    private readonly List<PortData> portDataList = new(); // 儲存所有端口資料的清單
+    private readonly string filePath;
+    private ConsoleUI consoleUI;
+    private readonly NetworkConnector networkConnector = new();
+    public readonly Dictionary<string, PortData> tcpServers = new();
+    public readonly Dictionary<string, PortData> tcpClients = new();
+    public readonly Dictionary<string, PortData> udpPorts = new();
+    private readonly List<PortData> portDataList = new();
 
-    public event Action<PortData> PortDataUpdated; // 端口資料更新事件
+    public event Action<PortData> PortDataUpdated;
 
     private NetworkPortManager()
     {
-        // 設定 JSON 文件的路徑
         filePath = Path.Combine(Application.dataPath, "portData.json");
         if (string.IsNullOrEmpty(filePath))
         {
@@ -34,150 +36,179 @@ public class NetworkPortManager
 
     public void Init()
     {
-        consoleUI = GameObject.FindObjectOfType<ConsoleUI>(true); // 找到控制台 UI
-        networkConnector.Init(consoleUI); // 初始化網路連接器
-        //PortDataUpdated += HandlePortDataUpdated; // 註冊事件處理器
+        consoleUI = GameObject.FindObjectOfType<ConsoleUI>(true);
+        networkConnector.Init(consoleUI);
     }
 
     public class PortData
     {
-        public string NetProtocol { get; set; } // 協定類型 (TCP/UDP)
-        public PortDetails LocalPortDetails { get; set; } // 本地端口詳情
-        public PortDetails RemotePortDetails { get; set; } // 遠端端口詳情
+        public string NetProtocol { get; set; }
+        public PortDetails LocalPortDetails { get; set; }
+        public PortDetails RemotePortDetails { get; set; }
         public string TargetIP { get; set; }
+        public int COMReceived { get; set; } = 0;
+        public int NetReceived { get; set; } = 0;
         [JsonIgnore]
-        public Action<PortData> OnUpdate { get; set; } // 更新時的回調函數
-        public int COMReceived { get; set; } = 0; // 接收到的 COM 數據量
-        public int NetReceived { get; set; } = 0; // 接收到的網路數據量
+        public Action<PortData> OnUpdate { get; set; }
     }
 
     public class PortDetails
     {
-        public int Port { get; set; } // 端口號
-        public string Description { get; set; } // 端口描述
+        public string Port { get; set; }
+        public string Description { get; set; }
     }
 
-    public PortData AddPortData(string protocolType, int remotePort, int localPort, string target)
+    public PortData AddPortData(string protocolType, string remotePort, string localPort, string target)
     {
-        // 建立新的 PortData 物件
         var data = new PortData
         {
             NetProtocol = protocolType,
             LocalPortDetails = new PortDetails { Port = localPort },
-            RemotePortDetails = new PortDetails { Port = remotePort },
+            RemotePortDetails = new PortDetails { Port = remotePort},
             TargetIP = target,
             COMReceived = 0,
             NetReceived = 0,
-            OnUpdate = data => OnUpdate(data) // 設定更新回調
+            OnUpdate = OnUpdate
         };
 
-        // 將物件加入字典和清單
-        AddPortToDictionary(data); // 將端口資料加入對應的字典
-        portDataList.Add(data); // 將端口資料加入清單
-        networkConnector.AddPort(data); // 通知網路連接器新增端口
-        JsonFileHandler.SaveToJson(filePath, portDataList); // 將資料保存到 JSON 文件中
-        return data; // 返回新增的端口資料
+        AddPortToDictionary(data);
+        portDataList.Add(data);
+        networkConnector.AddPort(data);
+        SavePortDataToFile();
+        return data;
     }
 
     private void AddPortToDictionary(PortData data)
     {
-        // 根據協定類型將資料加入對應的字典
-        if (data.NetProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        if (data.NetProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
-            tcpPorts[data.RemotePortDetails.Port] = data; // 添加 TCP 端口資料
-            Debug.Log($"Added TCP Port: {data.RemotePortDetails.Port}");
+            tcpServers[data.LocalPortDetails.Port] = data;
+        }
+        else if (data.NetProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            tcpClients[data.RemotePortDetails.Port] = data;
         }
         else if (data.NetProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
         {
-            udpPorts[data.RemotePortDetails.Port] = data; // 添加 UDP 端口資料
-            Debug.Log($"Added UDP Port: {data.RemotePortDetails.Port}");
+            udpPorts[data.RemotePortDetails.Port] = data;
         }
     }
 
-    public bool IsPortUnique(string protocolType, int port)
+    public bool IsPortUnique(string protocolType, string remotePort, string localPort)
     {
-        // 檢查端口是否唯一，根據協定類型進行判斷
-        return protocolType.Equals("TCP", StringComparison.OrdinalIgnoreCase) ? !tcpPorts.ContainsKey(port) :
-               protocolType.Equals("UDP", StringComparison.OrdinalIgnoreCase) && !udpPorts.ContainsKey(port);
+        if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+        {
+            return !tcpServers.ContainsKey(localPort); 
+        }
+        else if (protocolType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            return !tcpClients.ContainsKey(remotePort);
+        }
+        else if (protocolType.Equals("UDP", StringComparison.OrdinalIgnoreCase))
+        {
+            return !udpPorts.ContainsKey(remotePort);
+        }
+
+        return false;
     }
 
-    public void RemovePortData(string netProtocol, int remotePort)
+    public void RemovePortData(string netProtocol, PortData portData)
     {
-        // 取得要移除的資料
-        PortData dataToRemove = GetPortData(netProtocol, remotePort);
+        PortData dataToRemove = GetPortData(netProtocol, portData);
 
-        // 檢查是否成功取得資料
         if (dataToRemove == null)
         {
-            Debug.LogWarning($"找不到協定為 {netProtocol}，遠端端口為 {remotePort} 的資料。");
+            Debug.LogWarning($"未能找到協定為 {netProtocol} 的端口資料，無法移除。");
             return;
         }
 
-        // 日誌記錄移除的端口
-        Debug.Log($"Removing {netProtocol} Port: {remotePort}");
+        string portToRemove = (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+            ? dataToRemove.LocalPortDetails.Port
+            : dataToRemove.RemotePortDetails.Port;
 
-        // 取消事件訂閱，確保不再接收更新事件
+
+        Debug.Log($"Removing {netProtocol} Port: {portToRemove}");
         dataToRemove.OnUpdate -= OnUpdate;
+        RemovePortFromDictionary(netProtocol, portToRemove);
 
-        // 從字典中移除資料，並檢查是否成功移除
-        RemovePortFromDictionary(netProtocol, remotePort);
-
-        // 從清單中移除資料，並檢查是否成功移除
         bool removedFromList = portDataList.Remove(dataToRemove);
         if (!removedFromList)
         {
-            Debug.LogWarning($"未能成功從清單中移除協定為 {netProtocol}，遠端端口為 {remotePort} 的資料。");
+            Debug.LogWarning($"未能成功從清單中移除協定為 {netProtocol}，端口為 {portToRemove} 的資料。");
+        }
+        networkConnector.StopClient(portToRemove, netProtocol);
+
+        SavePortDataToFile();
+    }
+
+
+    private PortData GetPortData(string netProtocol, PortData portData)
+    {
+        if (portData == null)
+        {
+            throw new ArgumentNullException(nameof(portData), "PortData cannot be null.");
         }
 
-        // 停止對應的網路連接
-        networkConnector.StopClient(dataToRemove.RemotePortDetails.Port, netProtocol);
+        PortData resultPortData = null;
 
-        // 將更新後的資料保存到 JSON 文件中
-        JsonFileHandler.SaveToJson(filePath, portDataList);
-
-        // 在控制台輸出已移除的記錄
-        consoleUI.AddLog($"已移除 協定: {netProtocol}, 遠端端口: {remotePort}");
-    }
-
-    private PortData GetPortData(string netProtocol, int remotePort)
-    {
-        // 根據協定類型取得端口資料
-        return netProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase) ? tcpPorts.GetValueOrDefault(remotePort) :
-               netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase) ? udpPorts.GetValueOrDefault(remotePort) : null;
-    }
-
-    private void RemovePortFromDictionary(string netProtocol, int remotePort)
-    {
-        // 根據協定類型移除對應的端口資料
-        if (netProtocol.Equals("TCP", StringComparison.OrdinalIgnoreCase))
+        if (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
-            if (tcpPorts.Remove(remotePort))
+            resultPortData = tcpServers.GetValueOrDefault(portData.LocalPortDetails.Port);
+        }
+        else if (netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
+        {
+            resultPortData = udpPorts.GetValueOrDefault(portData.RemotePortDetails.Port);
+        }
+        else if (netProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            resultPortData = tcpClients.GetValueOrDefault(portData.RemotePortDetails.Port);
+        }
+
+        return resultPortData;
+    }
+
+
+    private void RemovePortFromDictionary(string netProtocol, string port)
+    {
+        if (netProtocol.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+        {
+            if (tcpServers.Remove(port))
             {
-                Debug.Log($"Successfully removed TCP Port: {remotePort}");
+                Debug.Log($"Successfully removed TCP Server on Local Port: {port}");
             }
             else
             {
-                Debug.LogWarning($"TCP Port: {remotePort} not found for removal.");
+                Debug.LogWarning($"TCP Server Local Port: {port} not found for removal.");
+            }
+        }
+        else if (netProtocol.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
+        {
+            if (tcpClients.Remove(port))
+            {
+                Debug.Log($"Successfully removed TCP Client on Remote Port: {port}");
+            }
+            else
+            {
+                Debug.LogWarning($"TCP Client Remote Port: {port} not found for removal.");
             }
         }
         else if (netProtocol.Equals("UDP", StringComparison.OrdinalIgnoreCase))
         {
-            if (udpPorts.Remove(remotePort))
+            if (udpPorts.Remove(port))
             {
-                Debug.Log($"Successfully removed UDP Port: {remotePort}");
+                Debug.Log($"Successfully removed UDP Port: {port}");
             }
             else
             {
-                Debug.LogWarning($"UDP Port: {remotePort} not found for removal.");
+                Debug.LogWarning($"UDP Port: {port} not found for removal.");
             }
         }
     }
 
     private void OnUpdate(PortData data)
     {
-        // 當端口資料更新時觸發的事件
         Debug.Log($"OnUpdate triggered for port: {data.RemotePortDetails.Port}, COMReceived: {data.COMReceived}");
-        PortDataUpdated?.Invoke(data); // 觸發事件
+        PortDataUpdated?.Invoke(data);
     }
 
     public void RefreshAndRecreateTables(PortTablePrefabManager prefabManager, UICollector uiCollector)
@@ -187,8 +218,6 @@ public class NetworkPortManager
 
     public void InstantiateTables(PortTablePrefabManager prefabManager, UICollector uiCollector)
     {
-        //var allPorts = tcpPorts.Values.Concat(udpPorts.Values).ToList();
-
         foreach (var portData in portDataList)
         {
             prefabManager.InstantiatePortTable(uiCollector, portData);
@@ -197,55 +226,64 @@ public class NetworkPortManager
 
     public void AddPortsToNetwork()
     {
-        // 將所有端口添加到網路
-        var allPorts = tcpPorts.Values.Concat(udpPorts.Values).ToList();
+        var allPorts = tcpServers.Values.Concat(udpPorts.Values).Concat(tcpClients.Values).ToList();
 
         foreach (var portData in allPorts)
         {
-            networkConnector.AddPort(portData); // 通知網路連接器添加端口
+            networkConnector.AddPort(portData);
         }
     }
 
+
     public void LoadFromJson()
     {
-        // 從 JSON 文件中加載端口資料
-        var loadedData = JsonFileHandler.LoadFromJson<PortData>(filePath);
-
-        if (loadedData.Any())
+        try
         {
-            portDataList.Clear(); // 清空現有端口資料
-            tcpPorts.Clear(); // 清空 TCP 端口字典
-            udpPorts.Clear(); // 清空 UDP 端口字典
+            var loadedData = JsonFileHandler.LoadFromJson<PortData>(filePath);
+            if (loadedData == null || !loadedData.Any())
+            {
+                consoleUI?.AddLog("載入的資料為空。");
+                return;
+            }
+
+            portDataList.Clear();
+            tcpServers.Clear();
+            udpPorts.Clear();
+            tcpClients.Clear();
 
             foreach (var data in loadedData)
             {
-                data.OnUpdate += OnUpdate;  // 確保事件重新訂閱
-                portDataList.Add(data); // 將加載的資料加入清單
-                AddPortToDictionary(data); // 將資料加入字典
+                data.OnUpdate += OnUpdate;
+                portDataList.Add(data);
+                AddPortToDictionary(data);
             }
         }
-        else
+        catch (Exception ex)
         {
-            Debug.LogWarning("載入的資料為空。");
+            consoleUI?.AddLog("無法載入資料，請檢查文件的格式和路徑。" + ex);
         }
     }
 
     public void DeInit()
     {
-        // 去初始化
         networkConnector.DeInit();
-        foreach (var portData in tcpPorts.Values.Concat(udpPorts.Values))
+        foreach (var portData in tcpServers.Values.Concat(udpPorts.Values).Concat(tcpClients.Values))
         {
-            portData.OnUpdate -= OnUpdate; // 取消事件訂閱
+            portData.OnUpdate -= OnUpdate;
         }
-        PortDataUpdated = null; // 清空事件
-        JsonFileHandler.SaveToJson(filePath, portDataList); // 保存當前資料到 JSON 文件
-    }
 
-    private void HandlePortDataUpdated(PortData data)
+        PortDataUpdated = null;
+        SavePortDataToFile();
+    }
+    private void SavePortDataToFile()
     {
-        // 當端口資料更新時的處理函數
-        JsonFileHandler.SaveToJson(filePath, portDataList); // 保存更新後的資料到 JSON 文件
-        Debug.Log($"PortDataUpdated: 協定: {data.NetProtocol}, 遠端端口: {data.RemotePortDetails.Port}, 總消息長度: {data.COMReceived}");
+        try
+        {
+            JsonFileHandler.SaveToJson(filePath, portDataList);
+        }
+        catch (Exception ex)
+        {
+            consoleUI?.AddLog("無法保存端口資料。");
+        }
     }
 }
