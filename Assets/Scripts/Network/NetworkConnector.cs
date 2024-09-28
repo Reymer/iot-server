@@ -134,27 +134,25 @@ public class NetworkConnector
             LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 客戶端已經存在。");
             return;
         }
-        LogOnMainThread($"在端口 {portData.RemotePortDetails.Port} 上啟動了 TCP 客戶端。");
+
         int maxRetries = 5;
         int retryDelay = 2000;
         int attempt = 0;
         bool connected = false;
 
-        // 初始化新的 TCPClinetData
         var tcpClientData = new TCPClinetData
         {
             remoteIP = portData.TargetIP,
             remotePort = portData.RemotePortDetails.Port,
             CancellationTokenSource = new CancellationTokenSource()
         };
-
+        LogOnMainThread($"在端口 {portData.RemotePortDetails.Port} 上啟動了 TCP 客戶端。");
         tcpClientdatas.TryAdd(portData.RemotePortDetails.Port, tcpClientData);
 
         while (attempt < maxRetries && !connected)
         {
             attempt++;
 
-            // 每次重連前檢查是否已經停止
             if (tcpClientData.IsStopped)
             {
                 LogOnMainThread($"TCP 客戶端停止重連，端口: {portData.RemotePortDetails.Port}");
@@ -172,7 +170,7 @@ public class NetworkConnector
             }
             catch (Exception ex)
             {
-                LogOnMainThread($"初始化 TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 時發生錯誤: {ex.Message}。重試次數: {attempt}/{maxRetries}", isError: true);
+                LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} {ex.Message}。", isError: true);
 
                 if (attempt < maxRetries)
                 {
@@ -181,7 +179,6 @@ public class NetworkConnector
                 else
                 {
                     LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 無法連接，已達到最大重試次數。", isError: true);
-                    tcpClientdatas.TryRemove(portData.RemotePortDetails.Port, out _);
                 }
             }
         }
@@ -295,7 +292,7 @@ public class NetworkConnector
         }
         catch (Exception ex)
         {
-            LogOnMainThread($"停止客戶端時出現錯誤: {ex.Message}", isError: true);
+            Debug.Log($"停止客戶端時出現錯誤: {ex.Message}");
         }
     }
     private void DisposeClientResources<T>(string port, ConcurrentDictionary<string, T> clientDictionary, string protocol) where T : IDisposable
@@ -305,17 +302,17 @@ public class NetworkConnector
             if (clientData is UdpData udpData)
             {
                 udpData.CancellationTokenSource.Cancel();
-                LogOnMainThread($"已停止並刪除 UDP 端口 {port} 上的 {protocol}。");
+                LogOnMainThread($"已刪除 UDP 端口 {port} 上的 {protocol}。");
             }
             else if (clientData is TCPServerData tcpServerData)
             {
                 tcpServerData.CancellationTokenSource.Cancel();
-                LogOnMainThread($"已停止並刪除 TCP 伺服器端口 {port} 上的 {protocol}。");
+                LogOnMainThread($"已刪除 TCP 伺服器端口 {port} 上的 {protocol}。");
             }
             else if (clientData is TCPClinetData tcpClientData)
             {
                 tcpClientData.CancellationTokenSource.Cancel();
-                LogOnMainThread($"已停止並刪除 TCP 客戶端端口 {port} 上的 {protocol}。");
+                LogOnMainThread($"已刪除 TCP 客戶端端口 {port} 上的 {protocol}。");
             }
 
             clientData.Dispose();
@@ -372,20 +369,28 @@ public class NetworkConnector
     {
         try
         {
+            tcpData.CancellationTokenSource.Token.ThrowIfCancellationRequested();
             var client = await tcpData.TcpListener.AcceptTcpClientAsync().WithCancellation(tcpData.CancellationTokenSource.Token);
             await ReceiveTcpMessages(portData, client, tcpData);
         }
-        catch (Exception ex) when (ex is OperationCanceledException ||
-                                    ex is ObjectDisposedException ||
-                                    (ex is SocketException se && se.SocketErrorCode == SocketError.Interrupted))
+        catch (OperationCanceledException)
         {
-            LogOnMainThread($"TCP 監聽器錯誤: {ex.Message}", isError: true);
+            Debug.Log("TCP 監聽器已取消");
+        }
+        catch (ObjectDisposedException)
+        {
+            Debug.Log("TCP 監聽器已被釋放");
+        }
+        catch (SocketException se) when (se.SocketErrorCode == SocketError.Interrupted)
+        {
+            Debug.Log($"Socket 中斷: {se.Message}");
         }
         catch (Exception ex)
         {
-            LogOnMainThread($"接受 TCP 客戶端錯誤: {ex.Message}", isError: true);
+            Debug.Log($"接受 TCP 客戶端錯誤: {ex.Message}");
         }
     }
+
 
     private async Task ReceiveTcpMessages(PortData portData, TcpClient client, TCPServerData tcpServerData)
     {
@@ -433,7 +438,7 @@ public class NetworkConnector
     {
         if (!tcpClientdatas.ContainsKey(portData.LocalPortDetails.Port))
         {
-            LogOnMainThread($"沒有可用的 TCP 客戶端!", isError: true);
+            Debug.Log($"沒有可用的 TCP 客戶端!");
             return;
         }
 

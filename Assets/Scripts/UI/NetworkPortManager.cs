@@ -283,7 +283,7 @@ public class NetworkPortManager
         }
         catch (Exception ex)
         {
-            consoleUI?.AddLog("無法保存端口資料。");
+            Debug.Log("無法保存端口資料。" + ex);
         }
     }
 }
