@@ -11,5 +11,9 @@ By 昌霖 開發日誌 2024/09/27
 
 
 
-Uploading bandicam 2024-09-29 00-25-43-876.mp4…
+
+
+
+
+https://github.com/user-attachments/assets/d83bd84c-242e-4514-9827-9e71acb3605a
 
