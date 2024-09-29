@@ -141,6 +141,11 @@ public class NetworkPortManager
         SavePortDataToFile();
     }
 
+    public void ConnectPort(string netProtocol, PortData portData)
+    {
+        networkConnector.AddPort(portData);
+    }
+
 
     private PortData GetPortData(string netProtocol, PortData portData)
     {

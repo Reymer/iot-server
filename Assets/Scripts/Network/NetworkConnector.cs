@@ -129,61 +129,79 @@ public class NetworkConnector
 
     private async void AddTcpClient(PortData portData)
     {
-        if (tcpClientdatas.ContainsKey(portData.RemotePortDetails.Port))
+        if (tcpClientdatas.TryGetValue(portData.RemotePortDetails.Port, out var tcpClientData))
         {
-            LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 客戶端已經存在。");
-            return;
+            // 如果TCP客户端已经存在且已连接，直接返回
+            if (tcpClientData.tcpClient != null && tcpClientData.tcpClient.Connected)
+            {
+                LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 客戶端已經連接。");
+                return;
+            }
+            else
+            {
+                LogOnMainThread($"端口 {portData.RemotePortDetails.Port} 的 TCP 客戶端尚未連接或已斷開，正在重新連接...");
+            }
+        }
+        else
+        {
+            // 创建新的TCP客户端数据
+            tcpClientData = new TCPClinetData
+            {
+                remoteIP = portData.TargetIP,
+                remotePort = portData.RemotePortDetails.Port,
+                CancellationTokenSource = new CancellationTokenSource()  // 支持取消操作
+            };
+            tcpClientdatas.TryAdd(portData.RemotePortDetails.Port, tcpClientData);
+            LogOnMainThread($"在端口 {portData.RemotePortDetails.Port} 上啟動了新的 TCP 客戶端。");
         }
 
-        int maxRetries = 5;
-        int retryDelay = 2000;
-        int attempt = 0;
-        bool connected = false;
-
-        var tcpClientData = new TCPClinetData
+        try
         {
-            remoteIP = portData.TargetIP,
-            remotePort = portData.RemotePortDetails.Port,
-            CancellationTokenSource = new CancellationTokenSource()
-        };
-        LogOnMainThread($"在端口 {portData.RemotePortDetails.Port} 上啟動了 TCP 客戶端。");
-        tcpClientdatas.TryAdd(portData.RemotePortDetails.Port, tcpClientData);
+            var tcpClient = new TcpClient();
 
-        while (attempt < maxRetries && !connected)
-        {
-            attempt++;
-
-            if (tcpClientData.IsStopped)
+            // 检查是否请求了取消操作
+            var token = tcpClientData.CancellationTokenSource.Token;
+            if (token.IsCancellationRequested)
             {
-                LogOnMainThread($"TCP 客戶端停止重連，端口: {portData.RemotePortDetails.Port}");
+                LogOnMainThread($"TCP 客戶端連接已被取消，端口 {portData.RemotePortDetails.Port}");
                 return;
             }
 
-            try
-            {
-                var tcpClient = new TcpClient();
-                await tcpClient.ConnectAsync(portData.TargetIP, int.Parse(portData.RemotePortDetails.Port));
+            // 异步连接，支持取消
+            var connectTask = tcpClient.ConnectAsync(portData.TargetIP, int.Parse(portData.RemotePortDetails.Port));
 
-                tcpClientData.tcpClient = tcpClient;
-                LogOnMainThread($"已連接到 TCP 客戶端: {portData.TargetIP}:{portData.RemotePortDetails.Port}");
-                connected = true;
-            }
-            catch (Exception ex)
-            {
-                LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} {ex.Message}。", isError: true);
+            // 等待连接并支持取消
+            await Task.WhenAny(connectTask, Task.Delay(Timeout.Infinite, token));
 
-                if (attempt < maxRetries)
-                {
-                    await Task.Delay(retryDelay);
-                }
-                else
-                {
-                    LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 無法連接，已達到最大重試次數。", isError: true);
-                }
+            // 如果任务因为取消而结束
+            if (token.IsCancellationRequested)
+            {
+                LogOnMainThread($"TCP 客戶端已連接但立即取消，端口 {portData.RemotePortDetails.Port}");
+                tcpClient.Close();  // 关闭连接
+                return;
             }
+
+            // 如果连接任务因失败抛出异常
+            if (connectTask.IsFaulted)
+            {
+                throw connectTask.Exception ?? new Exception("Unknown connection failure.");
+            }
+
+            // 连接成功
+            tcpClientData.tcpClient = tcpClient;
+            LogOnMainThread($"已連接到 TCP 客戶端: {portData.TargetIP}:{portData.RemotePortDetails.Port}");
+        }
+        catch (OperationCanceledException)
+        {
+            LogOnMainThread($"TCP 客戶端連接被取消，端口 {portData.RemotePortDetails.Port}");
+        }
+        catch (Exception ex)
+        {
+            // 捕获异常，报告连接失败
+            LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 連接失敗: {ex.Message}。");
+            LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 無法連接。請稍後重試。");
         }
     }
-
 
     /// <summary>
     /// 新增單個 TCP 監聽器
@@ -282,9 +300,9 @@ public class NetworkConnector
             }
             else if (connectionType.Equals("TCP Client", StringComparison.OrdinalIgnoreCase))
             {
-                if (tcpClientdatas.TryGetValue(port, out TCPClinetData clientData))
+                if (tcpClientdatas.TryGetValue(port, out TCPClinetData tcpClientData))
                 {
-                    clientData.IsStopped = true;
+                    tcpClientData.IsStopped = true;
                 }
 
                 DisposeClientResources(port, tcpClientdatas, "TCP");

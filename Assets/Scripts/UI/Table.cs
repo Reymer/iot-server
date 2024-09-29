@@ -10,11 +10,12 @@ public class Table : MonoBehaviour
     private string protocolType;
     private string remotePort;
     private string localPort;
+    private string targetIP;
+    private string receivedStatus;
     private int receivedCount;
     private int comReceivedCount;
-    private string receivedStatus;
-    private string targetIP;
-    public Action<string, PortData> delete;
+    public event Action<string, PortData> OnDelete;
+    public event Action<string, PortData> OnConnect;
 
     private void Start()
     {
@@ -30,7 +31,7 @@ public class Table : MonoBehaviour
         this.comReceivedCount = comReceivedCount;
         this.receivedCount = receivedCount;
         this.receivedStatus = receivedStatus;
-        SetValue();
+        SetValue(protocolType);
     }
 
     private void Subscribe()
@@ -47,10 +48,21 @@ public class Table : MonoBehaviour
                 NetReceived = receivedCount,
                 OnUpdate = null
             }));
+
+            uiCollector.BindOnCheck(UIKey.table_Connect, () => Connect(protocolType, new PortData
+            {
+                NetProtocol = protocolType,
+                RemotePortDetails = new PortDetails { Port = remotePort },
+                LocalPortDetails = new PortDetails { Port = localPort },
+                TargetIP = targetIP,
+                COMReceived = comReceivedCount,
+                NetReceived = receivedCount,
+                OnUpdate = null
+            }));
         }
     }
 
-    public void SetValue()
+    public void SetValue(string netProtocol)
     {
         if (uiCollector != null)
         {
@@ -61,12 +73,26 @@ public class Table : MonoBehaviour
             SetValue(UIKey.table_netReceived, receivedCount.ToString());
             SetValue(UIKey.table_ForwardTargetText, targetIP);
             SetValue(UIKey.table_netReceivedStatus, receivedStatus);
+            if(netProtocol.Equals("TCP Server"))
+            {
+                uiCollector.Deactive(UIKey.table_ConnectRoot);
+            }
+            else
+            {
+                uiCollector.Active(UIKey.table_ConnectRoot);
+            }
+
         }
     }
 
     public void Delete(string protocolType, PortData portData)
     {
-        delete?.Invoke(protocolType, portData);
+        OnDelete?.Invoke(protocolType, portData);
+    }
+
+    public void Connect(string protocolType, PortData portData)
+    {
+        OnConnect?.Invoke(protocolType, portData);
     }
 
     public void SetValue(string uiKey, string content)
