@@ -1,5 +1,6 @@
 using DevKit.Tool;
 using System;
+using Unity.VisualScripting;
 using UnityEngine;
 using static NetworkPortManager;
 
@@ -14,6 +15,7 @@ public class Table : MonoBehaviour
     private string receivedStatus;
     private int receivedCount;
     private int comReceivedCount;
+
     public event Action<string, PortData> OnDelete;
     public event Action<string, PortData> OnConnect;
 
@@ -31,75 +33,76 @@ public class Table : MonoBehaviour
         this.comReceivedCount = comReceivedCount;
         this.receivedCount = receivedCount;
         this.receivedStatus = receivedStatus;
-        SetValue(protocolType);
+
+        UpdateUI();
     }
 
     private void Subscribe()
     {
-        if (uiCollector != null)
+        if (uiCollector == null)
         {
-            uiCollector.BindOnCheck(UIKey.table_Delete, () => Delete(protocolType, new PortData
-            {
-                NetProtocol = protocolType,
-                RemotePortDetails = new PortDetails { Port = remotePort },
-                LocalPortDetails = new PortDetails { Port = localPort },
-                TargetIP = targetIP,
-                COMReceived = comReceivedCount,
-                NetReceived = receivedCount,
-                OnUpdate = null
-            }));
+            Debug.LogError("UICollector is not assigned.");
+            return;
+        }
 
-            uiCollector.BindOnCheck(UIKey.table_Connect, () => Connect(protocolType, new PortData
-            {
-                NetProtocol = protocolType,
-                RemotePortDetails = new PortDetails { Port = remotePort },
-                LocalPortDetails = new PortDetails { Port = localPort },
-                TargetIP = targetIP,
-                COMReceived = comReceivedCount,
-                NetReceived = receivedCount,
-                OnUpdate = null
-            }));
+        uiCollector.BindOnCheck(UIKey.table_Delete, () => HandleAction(OnDelete));
+        uiCollector.BindOnCheck(UIKey.table_Connect, () => HandleAction(OnConnect));
+    }
+
+    private void HandleAction(Action<string, PortData> action)
+    {
+        action?.Invoke(protocolType, CreatePortData());
+    }
+
+    private void UpdateUI()
+    {
+        if (uiCollector == null)
+        {
+            Debug.LogError("UICollector is not assigned.");
+            return;
+        }
+
+        SetValue(UIKey.table_prococolText, protocolType);
+        SetValue(UIKey.table_remoteText, remotePort);
+        SetValue(UIKey.table_localPortText, localPort);
+        SetValue(UIKey.table_COMReceived, comReceivedCount.ToString());
+        SetValue(UIKey.table_netReceived, receivedCount.ToString());
+        SetValue(UIKey.table_ForwardTargetText, targetIP);
+        SetValue(UIKey.table_netReceivedStatus, receivedStatus);
+
+        if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
+        {
+            uiCollector.Deactive(UIKey.table_ConnectRoot);
+        }
+        else
+        {
+            uiCollector.Active(UIKey.table_ConnectRoot);
         }
     }
 
-    public void SetValue(string netProtocol)
-    {
-        if (uiCollector != null)
-        {
-            SetValue(UIKey.table_prococolText, protocolType);
-            SetValue(UIKey.table_remoteText, remotePort.ToString());
-            SetValue(UIKey.table_localPortText, localPort.ToString());
-            SetValue(UIKey.table_COMReceived, comReceivedCount.ToString());
-            SetValue(UIKey.table_netReceived, receivedCount.ToString());
-            SetValue(UIKey.table_ForwardTargetText, targetIP);
-            SetValue(UIKey.table_netReceivedStatus, receivedStatus);
-            if(netProtocol.Equals("TCP Server"))
-            {
-                uiCollector.Deactive(UIKey.table_ConnectRoot);
-            }
-            else
-            {
-                uiCollector.Active(UIKey.table_ConnectRoot);
-            }
-
-        }
-    }
-
-    public void Delete(string protocolType, PortData portData)
-    {
-        OnDelete?.Invoke(protocolType, portData);
-    }
-
-    public void Connect(string protocolType, PortData portData)
-    {
-        OnConnect?.Invoke(protocolType, portData);
-    }
-
-    public void SetValue(string uiKey, string content)
+    private void SetValue(string uiKey, string content)
     {
         if (uiCollector != null)
         {
             uiCollector.SetText(uiKey, content);
         }
+        else
+        {
+            Debug.LogError("UICollector is not assigned.");
+        }
+    }
+
+    private PortData CreatePortData()
+    {
+        return new PortData
+        {
+            NetProtocol = protocolType,
+            RemotePortDetails = new PortDetails { Port = remotePort },
+            LocalPortDetails = new PortDetails { Port = localPort },
+            TargetIP = targetIP,
+            COMReceived = comReceivedCount,
+            NetReceived = receivedCount,
+            OnUpdate = null
+        };
     }
 }
