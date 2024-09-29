@@ -5,26 +5,26 @@ using UnityEngine;
 
 public class UnityMainThreadDispatcher : MonoBehaviour
 {
-    private static readonly Queue<Action> _executionQueue = new Queue<Action>();
+    private static readonly Queue<Action> executionQueue = new Queue<Action>();
 
-    private static UnityMainThreadDispatcher _instance = null;
+    private static UnityMainThreadDispatcher instance = null;
 
     public static UnityMainThreadDispatcher Instance()
     {
-        if (!_instance)
+        if (!instance)
         {
             throw new Exception("UnityMainThreadDispatcher is not initialized. Please add it to a GameObject in the scene.");
         }
-        return _instance;
+        return instance;
     }
 
     void Awake()
     {
-        if (_instance == null)
+        if (instance == null)
         {
-            _instance = this;
+            instance = this;
         }
-        else if (_instance != this)
+        else if (instance != this)
         {
             Destroy(gameObject);
         }
@@ -32,29 +32,29 @@ public class UnityMainThreadDispatcher : MonoBehaviour
 
     public void Update()
     {
-        lock (_executionQueue)
+        lock (executionQueue)
         {
-            while (_executionQueue.Count > 0)
+            while (executionQueue.Count > 0)
             {
-                _executionQueue.Dequeue().Invoke();
+                executionQueue.Dequeue().Invoke();
             }
         }
     }
 
     public void Enqueue(Action action)
     {
-        lock (_executionQueue)
+        lock (executionQueue)
         {
-            _executionQueue.Enqueue(action);
+            executionQueue.Enqueue(action);
         }
     }
 
     public static void Initialize()
     {
-        if (_instance == null)
+        if (instance == null)
         {
             GameObject obj = new("UnityMainThreadDispatcher");
-            _instance = obj.AddComponent<UnityMainThreadDispatcher>();
+            instance = obj.AddComponent<UnityMainThreadDispatcher>();
             DontDestroyOnLoad(obj);
         }
     }

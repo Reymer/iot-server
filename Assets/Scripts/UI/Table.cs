@@ -12,7 +12,8 @@ public class Table : MonoBehaviour
     private string remotePort;
     private string localPort;
     private string targetIP;
-    private string receivedStatus;
+    private string IsConnectting;
+    private bool receivedStatus;
     private int receivedCount;
     private int comReceivedCount;
 
@@ -24,17 +25,16 @@ public class Table : MonoBehaviour
         Subscribe();
     }
 
-    public void Init(string protocolType, string remotePort, string localPort, string targetIP, int comReceivedCount, int receivedCount, string receivedStatus)
+    public void Init(PortData portData)
     {
-        this.protocolType = protocolType;
-        this.remotePort = remotePort;
-        this.localPort = localPort;
-        this.targetIP = targetIP;
-        this.comReceivedCount = comReceivedCount;
-        this.receivedCount = receivedCount;
-        this.receivedStatus = receivedStatus;
-
-        UpdateUI();
+        this.protocolType = portData.NetProtocol;
+        this.remotePort = portData.RemotePortDetails.Port;
+        this.localPort = portData.LocalPortDetails.Port;
+        this.targetIP = portData.TargetIP;
+        this.comReceivedCount = portData.COMReceived;
+        this.receivedCount = portData.NetReceived;
+        this.receivedStatus = portData.IsConnected;
+        UpdateUI(portData);
     }
 
     private void Subscribe()
@@ -54,22 +54,20 @@ public class Table : MonoBehaviour
         action?.Invoke(protocolType, CreatePortData());
     }
 
-    private void UpdateUI()
+    private void UpdateUI(PortData portData)
     {
         if (uiCollector == null)
         {
             Debug.LogError("UICollector is not assigned.");
             return;
         }
-
         SetValue(UIKey.table_prococolText, protocolType);
         SetValue(UIKey.table_remoteText, remotePort);
         SetValue(UIKey.table_localPortText, localPort);
         SetValue(UIKey.table_COMReceived, comReceivedCount.ToString());
         SetValue(UIKey.table_netReceived, receivedCount.ToString());
         SetValue(UIKey.table_ForwardTargetText, targetIP);
-        SetValue(UIKey.table_netReceivedStatus, receivedStatus);
-
+        SetValue(UIKey.table_netReceivedStatus, GetIsConnectting(portData));
         if (protocolType.Equals("TCP Server", StringComparison.OrdinalIgnoreCase))
         {
             uiCollector.Deactive(UIKey.table_ConnectRoot);
@@ -79,6 +77,20 @@ public class Table : MonoBehaviour
             uiCollector.Active(UIKey.table_ConnectRoot);
         }
     }
+
+    private string GetIsConnectting(PortData portData)
+    {
+        if(portData.NetProtocol.Equals("UDP") || portData.NetProtocol.Equals("TCP Server"))
+        {
+            return "Connectting";
+        }
+        else if(portData.NetProtocol.Equals("TCP Client") && portData.IsConnected)
+        {
+            return "Connectting";
+        }
+        return "No Connectting";
+    }
+
 
     private void SetValue(string uiKey, string content)
     {
