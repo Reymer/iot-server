@@ -41,8 +41,10 @@ MonoBehaviour:
   - table_localPortText
   - table_COMReceived
   - table_ForwardTargetText
-  - table_Delete
   - table_netReceivedStatus
+  - table_Delete
+  - table_Connect
+  - table_ConnectRoot
   IncreaseCollectorID: 0
   collectorKeys:
   - id: -1
@@ -99,5 +101,7 @@ MonoBehaviour:
     - table_localPortText
     - table_COMReceived
     - table_ForwardTargetText
-    - table_Delete
     - table_netReceivedStatus
+    - table_Delete
+    - table_Connect
+    - table_ConnectRoot

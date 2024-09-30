@@ -8,6 +8,7 @@ using DevKit.Console;
 using DevKit.Tool;
 using Newtonsoft.Json;
 using UnityEngine;
+using TMPro;
 
 public class NetworkPortManager
 {
@@ -46,6 +47,7 @@ public class NetworkPortManager
         public PortDetails LocalPortDetails { get; set; }
         public PortDetails RemotePortDetails { get; set; }
         public string TargetIP { get; set; }
+        public bool IsConnected { get; set; }
         public int COMReceived { get; set; } = 0;
         public int NetReceived { get; set; } = 0;
         [JsonIgnore]
@@ -65,6 +67,7 @@ public class NetworkPortManager
             NetProtocol = protocolType,
             LocalPortDetails = new PortDetails { Port = localPort },
             RemotePortDetails = new PortDetails { Port = remotePort},
+            IsConnected = false,
             TargetIP = target,
             COMReceived = 0,
             NetReceived = 0,
@@ -141,6 +144,11 @@ public class NetworkPortManager
         SavePortDataToFile();
     }
 
+    public void ConnectPort(string netProtocol, PortData portData)
+    {
+        networkConnector.AddPort(portData);
+    }
+
 
     private PortData GetPortData(string netProtocol, PortData portData)
     {
@@ -205,9 +213,9 @@ public class NetworkPortManager
         }
     }
 
-    private void OnUpdate(PortData data)
+    public void OnUpdate(PortData data)
     {
-        Debug.Log($"OnUpdate triggered for port: {data.RemotePortDetails.Port}, COMReceived: {data.COMReceived}");
+        Debug.Log($"OnUpdate triggered for port: {data.RemotePortDetails.Port}, COMReceived: {data.COMReceived}, IsConnectting: {data.IsConnected}");
         PortDataUpdated?.Invoke(data);
     }
 

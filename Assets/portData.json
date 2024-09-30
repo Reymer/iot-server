@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "NetProtocol": "TCP Server",
+    "LocalPortDetails": {
+      "Port": "7743",
+      "Description": null
+    },
+    "RemotePortDetails": {
+      "Port": "--",
+      "Description": null
+    },
+    "TargetIP": null,
+    "IsConnected": false,
+    "COMReceived": 0,
+    "NetReceived": 0
+  },
+  {
+    "NetProtocol": "TCP Client",
+    "LocalPortDetails": {
+      "Port": "--",
+      "Description": null
+    },
+    "RemotePortDetails": {
+      "Port": "7743",
+      "Description": null
+    },
+    "TargetIP": "192.168.1.105",
+    "IsConnected": true,
+    "COMReceived": 0,
+    "NetReceived": 0
+  }
+]

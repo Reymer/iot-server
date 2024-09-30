@@ -53,8 +53,12 @@ namespace DevKit.Tool
         
         public const string table_ForwardTargetText = "table_ForwardTargetText";
         
+        public const string table_netReceivedStatus = "table_netReceivedStatus";
+        
         public const string table_Delete = "table_Delete";
         
-        public const string table_netReceivedStatus = "table_netReceivedStatus";
+        public const string table_Connect = "table_Connect";
+        
+        public const string table_ConnectRoot = "table_ConnectRoot";
     }
 }

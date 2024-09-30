@@ -1,4 +1,5 @@
 using DevKit.Tool;
+using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
 using UnityEngine;
@@ -29,8 +30,9 @@ public class PortTablePrefabManager : MonoBehaviour
     {
         if (instance.TryGetComponent<Table>(out var table))
         {
-            table.Init(portData.NetProtocol, portData.RemotePortDetails.Port, portData.LocalPortDetails.Port, portData.TargetIP, portData.COMReceived, portData.NetReceived, "Connecting");
-            table.delete += (protocol, PortData) => DeletePort(protocol, portData);
+            table.Init(portData);
+            table.OnDelete += (protocol, PortData) => DeletePort(protocol, portData);
+            table.OnConnect += (protocol, PortData) => ConnectPort(protocol, portData);
         }
     }
 
@@ -50,6 +52,13 @@ public class PortTablePrefabManager : MonoBehaviour
         if (portTableUIManager != null)
         {
             portTableUIManager.OnRemove(protocolType, portData);
+        }
+    }
+    private void ConnectPort(string protocolType, PortData portData)
+    {
+        if (portTableUIManager != null)
+        {
+            portTableUIManager.OnConnect(protocolType, portData);
         }
     }
 }

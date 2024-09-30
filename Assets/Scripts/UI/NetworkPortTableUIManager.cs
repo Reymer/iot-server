@@ -43,6 +43,14 @@ public class NetworkPortTableUIManager : MonoBehaviour
         NetworkPortManager.Instance.RefreshAndRecreateTables(prefabManager, uiCollector);
     }
 
+    public void OnConnect(string netProtocol, PortData portData)
+    {
+        prefabManager.RefreshAndRecreateTables(uiCollector);
+        NetworkPortManager.Instance.ConnectPort(netProtocol, portData);
+        NetworkPortManager.Instance.RefreshAndRecreateTables(prefabManager, uiCollector);
+    }
+
+
     public void OnUpdate(PortData portData)
     {
         prefabManager.RefreshAndRecreateTables(uiCollector);
