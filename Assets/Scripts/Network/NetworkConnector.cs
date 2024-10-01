@@ -10,6 +10,7 @@ using UnityEngine;
 using DevKit.Console;
 using static NetworkPortManager;
 using System.IO;
+using static NetworkConnector;
 
 public class NetworkConnector
 {
@@ -196,7 +197,8 @@ public class NetworkConnector
         {
             portData.IsConnected = false;
             LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 連接失敗: {ex.Message}。");
-            LogOnMainThread($"TCP 客戶端 {portData.TargetIP}:{portData.RemotePortDetails.Port} 無法連接。請稍後重試。");
+            RemoveClient(portData.RemotePortDetails.Port);
+
         }
         finally
         {
@@ -444,7 +446,7 @@ public class NetworkConnector
                         string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                         tcpServerData.SourceData = message;
 
-                        LogOnMainThread($"TCP 收到訊息來自: IP {sourceIP}, Port {sourcePort}, 訊息: {message}");
+                        LogOnMainThread($"TCP 伺服器。收到訊息從: IP {remoteEndPoint}, 訊息: {message}");
 
                         if (tcpClientdatas.Count > 0)
                         {
@@ -465,9 +467,9 @@ public class NetworkConnector
         }
         finally
         {
-            RemoveClient(portData.LocalPortDetails.Port);
+            //RemoveClient(portData.LocalPortDetails.Port);
             client.Dispose();
-            LogOnMainThread($"端口 {portData.LocalPortDetails.Port} 上的 TCP 接收器已經關閉。");
+            //LogOnMainThread($"端口 {portData.LocalPortDetails.Port} 上的 TCP 接收器已經關閉。");
         }
     }
 
@@ -488,7 +490,7 @@ public class NetworkConnector
                 NetworkStream stream = tcpClinetData.tcpClient.GetStream();
                 stream.Write(buffer, 0, buffer.Length);
                 tcpClinetData.IsConnecting = true;
-                LogOnMainThread($"訊息已傳送到客戶端: {tcpClinetData.tcpClient.Client.RemoteEndPoint}");
+                LogOnMainThread($"TCP 客戶端。傳送訊息到: IP {tcpClinetData.tcpClient.Client.RemoteEndPoint}, 訊息: {tcpServerData.SourceData}");
             }
             catch (Exception ex)
             {
@@ -500,12 +502,12 @@ public class NetworkConnector
         {
             tcpClinetData.IsConnecting = false;
             tcpClinetData.portData.IsConnected = tcpClinetData.IsConnecting;
+            LogOnMainThread($"來自 {tcpClinetData.tcpClient.Client.RemoteEndPoint} TCP 客戶端已斷開連接: ", isError: true);
+            RemoveClient(tcpClinetData.localPort);
             UnityMainThreadDispatcher.Instance().Enqueue(() =>
             {
                 tcpClinetData.portData.OnUpdate?.Invoke(tcpClinetData.portData);
             });
-            LogOnMainThread($"TCP 客戶端已斷開連接: {tcpClinetData.tcpClient.Client.RemoteEndPoint}", isError: true);
-            RemoveClient(tcpClinetData.localPort);
             return;
         }
     }
@@ -515,11 +517,7 @@ public class NetworkConnector
         if (tcpClientdatas.TryRemove(clientId, out var clientData))
         {
             LogOnMainThread($"TCP 客戶端 {clientId} 已斷開連接。");
-            clientData.tcpClient.Dispose(); // Dispose of the TcpClient
-        }
-        else
-        {
-            Debug.Log($"無法找到 TCP 客戶端 {clientId} 以移除。");
+            clientData.tcpClient.Dispose();
         }
     }
 

@@ -6537,7 +6537,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.3137255}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.54509807}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -7696,7 +7696,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1823059825
 RectTransform:
   m_ObjectHideFlags: 0
@@ -8225,7 +8225,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3c00b633df57f44479973f800492d519, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  logUIPrefab: {fileID: 8205128326613325059, guid: e9dd609e159fa804b9a1a4de16da7378, type: 3}
+  logUIPrefab: {fileID: 8205128326613325059, guid: c8a974b375362a143bb520debb39b55d, type: 3}
   logRoot: {fileID: 8754912326337567012}
   inputField: {fileID: 8754912327936962784}
 --- !u!1 &8754912326337567011
@@ -8263,7 +8263,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -0.00024414062}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &8754912326337567013
