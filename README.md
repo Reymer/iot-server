@@ -8,12 +8,12 @@ By 昌霖 開發日誌 2024/09/27
 後續可能新增 ：
 可以把來源資料做一些處理 譬如傳 JSON 檔或是 XML
 
+By 昌霖 開發日誌 2024/09/30
+現在看起來好多了，把一些UI跟斷線重連的指示燈寫完。
+加了手機投影用來測試IOT Server 把資料轉傳給手機
+​1.  新增TCP Client連線指示燈
+2.  保存機制完善
+3.  程式大部分重構優化
 
-
-
-
-
-
-
-https://github.com/user-attachments/assets/d83bd84c-242e-4514-9827-9e71acb3605a
+https://github.com/user-attachments/assets/f3dcd2ef-38c4-497d-a176-ae9ed6a3dfb2
 
